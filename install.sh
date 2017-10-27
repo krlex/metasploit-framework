@@ -7,6 +7,6 @@ sudo gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A17031138
 cd /tmp
 sudo curl -sSL https://get.rvm.io -o rvm.sh
 sudo cat /tmp/rvm.sh | bash -s stable --rails
-sudo source /usr/local/rvm/scripts/rvm
+source /usr/local/rvm/scripts/rvm
 sudo rvm install "ruby-2.4.2"
 sudo bundler
