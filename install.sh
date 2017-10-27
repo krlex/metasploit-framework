@@ -10,3 +10,4 @@ sudo cat /tmp/rvm.sh | bash -s stable --rails
 source /usr/local/rvm/scripts/rvm
 rvm install "ruby-2.4.2"
 bundler install
+yard config --gem-install-yri
