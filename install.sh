@@ -7,9 +7,9 @@ sudo gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A17031138
 cd /tmp
 sudo curl -sSL https://get.rvm.io -o rvm.sh
 cat /tmp/rvm.sh | bash -s stable --rails
+bundler install
 source /usr/local/rvm/scripts/rvm
 rvm install "ruby-2.4.2"
-bundler install
 echo "if stop and say 'Could not locate Gemfile' do manual command 'bundler install'"
 echo "if stop and say 'install.sh: 10: install.sh: source: not found' do manual command 'source /usr/local/rvm/scripts/rvm'"
 yard config --gem-install-yri
