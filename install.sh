@@ -11,4 +11,5 @@ source /usr/local/rvm/scripts/rvm
 rvm install "ruby-2.4.2"
 bundler install
 echo "if stop and say 'Could not locate Gemfile' do manual command 'bundler install'"
+echo "if stop and say 'install.sh: 10: install.sh: source: not found' do manual command 'source /usr/local/rvm/scripts/rvm'"
 yard config --gem-install-yri
