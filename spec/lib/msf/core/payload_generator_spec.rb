@@ -131,7 +131,7 @@ RSpec.describe Msf::PayloadGenerator do
         }
       }
 
-      it { is_expected.to raise_error(ArgumentError, "Invalid Payload Selected") }
+      it { is_expected.to raise_error(ArgumentError, "invalid payload: ") }
     end
 
     context 'when given an invalid payload' do
@@ -155,7 +155,7 @@ RSpec.describe Msf::PayloadGenerator do
         }
       }
 
-      it { is_expected.to raise_error(ArgumentError, "Invalid Payload Selected") }
+      it { is_expected.to raise_error(ArgumentError, "invalid payload: beos/meterpreter/reverse_gopher") }
     end
 
     context 'when given a payload through stdin' do
@@ -203,7 +203,7 @@ RSpec.describe Msf::PayloadGenerator do
         }
       }
 
-      it { is_expected.to raise_error(ArgumentError, "Invalid Format Selected") }
+      it { is_expected.to raise_error(Msf::InvalidFormat, "invalid format: foobar") }
     end
 
     context 'when given any valid transform format' do
@@ -1056,7 +1056,7 @@ RSpec.describe Msf::PayloadGenerator do
         }
       }
       it 'applies the appropriate transform format' do
-        expect(::Msf::Simple::Buffer).to receive(:transform).with(shellcode, 'c', 'buf')
+        expect(::Msf::Simple::Buffer).to receive(:transform).with(shellcode, 'c', 'buf', {})
         payload_generator.format_payload(shellcode)
       end
     end

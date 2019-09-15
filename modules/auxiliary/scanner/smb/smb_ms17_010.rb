@@ -4,8 +4,10 @@
 ##
 
 class MetasploitModule < Msf::Auxiliary
+  include Msf::Exploit::Remote::DCERPC
   include Msf::Exploit::Remote::SMB::Client
   include Msf::Exploit::Remote::SMB::Client::Authenticated
+  include Msf::Exploit::Remote::SMB::Client::PipeAuditor
 
   include Msf::Auxiliary::Scanner
   include Msf::Auxiliary::Report
@@ -32,8 +34,6 @@ class MetasploitModule < Msf::Auxiliary
           ],
       'References'     =>
         [
-          [ 'AKA', 'DOUBLEPULSAR' ],
-          [ 'AKA', 'ETERNALBLUE' ],
           [ 'CVE', '2017-0143'],
           [ 'CVE', '2017-0144'],
           [ 'CVE', '2017-0145'],
@@ -45,12 +45,21 @@ class MetasploitModule < Msf::Auxiliary
           [ 'URL', 'https://github.com/countercept/doublepulsar-detection-script'],
           [ 'URL', 'https://technet.microsoft.com/en-us/library/security/ms17-010.aspx']
         ],
-      'License'        => MSF_LICENSE
+      'License'        => MSF_LICENSE,
+      'Notes' =>
+          {
+              'AKA' => [
+                  'DOUBLEPULSAR',
+                  'ETERNALBLUE'
+              ]
+          }
     ))
 
     register_options(
       [
-        OptBool.new('CHECK_DOPU', [true, 'Check for DOUBLEPULSAR on vulnerable hosts', true])
+        OptBool.new('CHECK_DOPU', [false, 'Check for DOUBLEPULSAR on vulnerable hosts', true]),
+        OptBool.new('CHECK_ARCH', [false, 'Check for architecture on vulnerable hosts', true]),
+        OptBool.new('CHECK_PIPE', [false, 'Check for named pipe on vulnerable hosts', false])
       ])
   end
 
@@ -66,6 +75,8 @@ class MetasploitModule < Msf::Auxiliary
   end
 
   def run_host(ip)
+    checkcode = Exploit::CheckCode::Unknown
+
     begin
       ipc_share = "\\\\#{ip}\\IPC$"
 
@@ -76,12 +87,27 @@ class MetasploitModule < Msf::Auxiliary
       vprint_status("Received #{status} with FID = 0")
 
       if status == "STATUS_INSUFF_SERVER_RESOURCES"
-        print_good("Host is likely VULNERABLE to MS17-010!  (#{simple.client.peer_native_os})")
+        os = simple.client.peer_native_os
+
+        if datastore['CHECK_ARCH']
+          case dcerpc_getarch
+          when ARCH_X86
+            os << ' x86 (32-bit)'
+          when ARCH_X64
+            os << ' x64 (64-bit)'
+          end
+        end
+
+        print_good("Host is likely VULNERABLE to MS17-010! - #{os}")
+
+        checkcode = Exploit::CheckCode::Vulnerable
+
         report_vuln(
           host: ip,
+          port: rport, # A service is necessary for the analyze command
           name: self.name,
           refs: self.references,
-          info: 'STATUS_INSUFF_SERVER_RESOURCES for FID 0 against IPC$ -- (#{simple.client.peer_native_os})'
+          info: "STATUS_INSUFF_SERVER_RESOURCES for FID 0 against IPC$ - #{os}"
         )
 
         # vulnerable to MS17-010, check for DoublePulsar infection
@@ -100,6 +126,23 @@ class MetasploitModule < Msf::Auxiliary
             )
           end
         end
+
+        if datastore['CHECK_PIPE']
+          pipe_name, _ = check_named_pipes(return_first: true)
+
+          return unless pipe_name
+
+          print_good("Named pipe found: #{pipe_name}")
+
+          report_note(
+            host:  ip,
+            port:  rport,
+            proto: 'tcp',
+            sname: 'smb',
+            type:  'MS17-010 Named Pipe',
+            data:  pipe_name
+          )
+        end
       elsif status == "STATUS_ACCESS_DENIED" or status == "STATUS_INVALID_HANDLE"
         # STATUS_ACCESS_DENIED (Windows 10) and STATUS_INVALID_HANDLE (others)
         print_error("Host does NOT appear vulnerable.")
@@ -117,6 +160,8 @@ class MetasploitModule < Msf::Auxiliary
     ensure
       disconnect
     end
+
+    checkcode
   end
 
   def do_smb_setup_tree(ipc_share)

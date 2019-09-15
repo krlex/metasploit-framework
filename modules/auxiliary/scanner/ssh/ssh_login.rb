@@ -12,8 +12,8 @@ class MetasploitModule < Msf::Auxiliary
   include Msf::Auxiliary::AuthBrute
   include Msf::Auxiliary::Report
   include Msf::Auxiliary::CommandShell
-
   include Msf::Auxiliary::Scanner
+  include Msf::Exploit::Remote::SSH::Options
 
   def initialize
     super(
@@ -42,22 +42,24 @@ class MetasploitModule < Msf::Auxiliary
     register_advanced_options(
       [
         Opt::Proxies,
-        OptBool.new('SSH_DEBUG', [ false, 'Enable SSH debugging output (Extreme verbosity!)', false]),
-        OptInt.new('SSH_TIMEOUT', [ false, 'Specify the maximum time to negotiate a SSH session', 30])
+        OptBool.new('SSH_DEBUG', [false, 'Enable SSH debugging output (Extreme verbosity!)', false]),
+        OptInt.new('SSH_TIMEOUT', [false, 'Specify the maximum time to negotiate a SSH session', 30]),
+        OptBool.new('GatherProof', [true, 'Gather proof of access via pre-session shell commands', false])
       ]
     )
 
+    deregister_options('PASSWORD_SPRAY')
   end
 
   def rport
     datastore['RPORT']
   end
 
-  def session_setup(result, ssh_socket)
-    return unless ssh_socket
+  def session_setup(result, scanner)
+    return unless scanner.ssh_socket
 
     # Create a new session
-    conn = Net::SSH::CommandStream.new(ssh_socket, '/bin/sh', true)
+    conn = Net::SSH::CommandStream.new(scanner.ssh_socket)
 
     merge_me = {
       'USERPASS_FILE' => nil,
@@ -68,27 +70,19 @@ class MetasploitModule < Msf::Auxiliary
     }
     info = "#{proto_from_fullname} #{result.credential} (#{@ip}:#{rport})"
     s = start_session(self, info, merge_me, false, conn.lsock)
-    self.sockets.delete(ssh_socket.transport.socket)
+    self.sockets.delete(scanner.ssh_socket.transport.socket)
 
     # Set the session platform
-    case result.proof
-    when /Linux/
-      s.platform = "linux"
-    when /Darwin/
-      s.platform = "osx"
-    when /SunOS/
-      s.platform = "solaris"
-    when /BSD/
-      s.platform = "bsd"
-    when /HP-UX/
-      s.platform = "hpux"
-    when /AIX/
-      s.platform = "aix"
-    when /Win32|Windows/
-      s.platform = "windows"
-    when /Unknown command or computer name/
-      s.platform = "cisco-ios"
+    s.platform = scanner.get_platform(result.proof)
+
+    # Create database host information
+    host_info = {host: scanner.host}
+
+    unless s.platform == 'unknown'
+      host_info[:os_name] = s.platform
     end
+
+    report_host(host_info)
 
     s
   end
@@ -119,6 +113,7 @@ class MetasploitModule < Msf::Auxiliary
       connection_timeout: datastore['SSH_TIMEOUT'],
       framework: framework,
       framework_module: self,
+      skip_gather_proof: !datastore['GatherProof']
     )
 
     scanner.verbosity = :debug if datastore['SSH_DEBUG']
@@ -132,10 +127,11 @@ class MetasploitModule < Msf::Auxiliary
       case result.status
       when Metasploit::Model::Login::Status::SUCCESSFUL
         print_brute :level => :good, :ip => ip, :msg => "Success: '#{result.credential}' '#{result.proof.to_s.gsub(/[\r\n\e\b\a]/, ' ')}'"
+        credential_data[:private_type] = :password
         credential_core = create_credential(credential_data)
         credential_data[:core] = credential_core
         create_credential_login(credential_data)
-        session_setup(result, scanner.ssh_socket)
+        session_setup(result, scanner) if datastore['CreateSession']
         :next_user
       when Metasploit::Model::Login::Status::UNABLE_TO_CONNECT
         vprint_brute :level => :verror, :ip => ip, :msg => "Could not connect: #{result.proof}"

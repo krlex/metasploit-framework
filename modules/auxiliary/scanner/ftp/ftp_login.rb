@@ -46,7 +46,7 @@ class MetasploitModule < Msf::Auxiliary
       ]
     )
 
-    deregister_options('FTPUSER','FTPPASS') # Can use these, but should use 'username' and 'password'
+    deregister_options('FTPUSER','FTPPASS', 'PASSWORD_SPRAY') # Can use these, but should use 'username' and 'password'
     @accepts_all_logins = {}
   end
 
@@ -94,6 +94,7 @@ class MetasploitModule < Msf::Auxiliary
           workspace_id: myworkspace_id
       )
       if result.success?
+        credential_data[:private_type] = :password
         credential_core = create_credential(credential_data)
         credential_data[:core] = credential_core
         create_credential_login(credential_data)

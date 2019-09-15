@@ -10,8 +10,7 @@
 #
 ###
 
-# Sanity check this version of ruby
-require 'msf/sanity'
+# Include backported features for older versions of Ruby
 require 'backports'
 
 # The framework-core depends on Rex
@@ -52,6 +51,7 @@ require 'msf/core/module_set'
 require 'msf/core/plugin_manager'
 require 'msf/core/session'
 require 'msf/core/session_manager'
+require 'msf/core/analyze'
 
 
 
@@ -69,7 +69,9 @@ require 'msf/core/exploit'
 require 'msf/core/nop'
 require 'msf/core/payload'
 require 'msf/core/post'
+require 'msf/core/evasion'
 
 # Drivers
 require 'msf/core/exploit_driver'
+require 'msf/core/evasion_driver'
 

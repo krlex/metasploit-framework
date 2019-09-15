@@ -1,6 +1,6 @@
 ##
 # WARNING: Metasploit no longer maintains or accepts meterpreter scripts.
-# If you'd like to imporve this script, please try to port it as a post
+# If you'd like to improve this script, please try to port it as a post
 # module instead. Thank you.
 ##
 
@@ -73,7 +73,7 @@ if client.platform == 'windows'
   # Upload to the filesystem
   #
 
-  tempdir = client.fs.file.expand_path("%TEMP%") + "\\" + Rex::Text.rand_text_alpha(rand(8)+8)
+  tempdir = client.sys.config.getenv('TEMP') + "\\" + Rex::Text.rand_text_alpha(rand(8)+8)
 
   print_status("Creating a temporary installation directory #{tempdir}...")
   client.fs.dir.mkdir(tempdir)

@@ -27,7 +27,7 @@ class MetasploitModule < Msf::Auxiliary
         ],
       'Author'         =>
         [
-          'patrick', #original module
+          'aushack', #original module
           'h00die <mike@shorebreaksecurity.com>' #updates and standardizations
         ],
       'License'        => MSF_LICENSE
@@ -39,6 +39,8 @@ class MetasploitModule < Msf::Auxiliary
         OptPath.new('PASS_FILE',  [ true, 'File containing passwords, one per line',
           File.join(Msf::Config.data_directory, 'wordlists', 'unix_passwords.txt') ])
       ])
+
+    deregister_options('PASSWORD_SPRAY')
 
     # We don't currently support an auth mechanism that uses usernames, so we'll ignore any
     # usernames that are passed in.

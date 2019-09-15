@@ -2,6 +2,10 @@
 
 module Msf::Post::Common
 
+  def clear_screen
+    Gem.win_platform? ? (system "cls") : (system "clear")
+  end
+
   def rhost
     return nil unless session
 
@@ -107,18 +111,17 @@ module Msf::Post::Common
       end
 
       session.response_timeout = time_out
-      process = session.sys.process.execute(cmd, args, {'Hidden' => true, 'Channelized' => true})
+      process = session.sys.process.execute(cmd, args, {'Hidden' => true, 'Channelized' => true, 'Subshell' => true })
       o = ""
       # Wait up to time_out seconds for the first bytes to arrive
       while (d = process.channel.read)
+        o << d
         if d == ""
-          if (Time.now.to_i - start < time_out) && (o == '')
+          if Time.now.to_i - start < time_out
             sleep 0.1
           else
             break
           end
-        else
-          o << d
         end
       end
       o.chomp! if o
@@ -156,7 +159,7 @@ module Msf::Post::Common
           args = ""
         end
         session.response_timeout = time_out
-        process = session.sys.process.execute(cmd, args, {'Hidden' => true, 'Channelized' => true})
+        process = session.sys.process.execute(cmd, args, {'Hidden' => true, 'Channelized' => true, 'Subshell' => true })
         process.channel.close
         pid = process.pid
         process.close
@@ -232,6 +235,20 @@ module Msf::Post::Common
     nil
   end
 
-  private
+  #
+  # Checks if the `cmd` is installed on the system
+  # @return [Boolean]
+  #
+  def command_exists?(cmd)
+    if session.platform == 'windows'
+      # https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/where_1
+      # https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/if
+      cmd_exec("cmd /c where /q #{cmd} & if not errorlevel 1 echo true").to_s.include? 'true'
+    else
+      cmd_exec("command -v #{cmd} && echo true").to_s.include? 'true'
+    end
+  rescue
+    raise "Unable to check if command `#{cmd}' exists"
+  end
 
 end
